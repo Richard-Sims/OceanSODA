@@ -117,7 +117,113 @@ if runPairedMetrics == True:
         years = utilities.calculate_years_for_input_combination(settings, combinationMap); #Find the years where there is overlap in the selected input data combinations
         matchupData = utilities.load_matchup_to_dataframe(settings, combinationMap, years=years); #each year is concatinated to create a single dataframe
         
+         
+        SST_max=40;
+        SST_min=-10;
+        SSS_max=50;
+        SSS_min=0;      
+        DIC_max=3000;
+        DIC_min=500; 
+        pH_max=8.5;
+        pH_min=7;
+        pCO2_max=800;
+        pCO2_min=100;
+        TA_max=3000;
+        TA_min=500;
         
+        #SST
+        mdb_SST = matchupData["SST"];
+        mdb_SST_numeric=mdb_SST.values-273.15;
+        #Upper realistic limit 
+        states=mdb_SST_numeric>SST_max;
+        index_temp_exceed=np.where(states)[0]
+        #Lower realistic limit -10 degrees
+        states2=mdb_SST_numeric<SST_min;
+        index_temp_below=np.where(states2)[0]
+        
+        #Salinity
+        mdb_SSS = matchupData["SSS"];
+        mdb_SSS_numeric=mdb_SSS.values;
+        #Upper realistic limit 50 PSU
+        states3=mdb_SSS_numeric>SSS_max;
+        index_sal_exceed=np.where(states3)[0]
+        #Lower realistic limit <0 PSU
+        states4=mdb_SSS_numeric<SSS_min;
+        index_sal_below=np.where(states4)[0]        
+        
+        #DIC
+        mdb_DIC = matchupData["DIC"];
+        mdb_DIC_numeric=mdb_DIC.values;
+        #Upper realistic limit 2500 UMOLKG?
+        states5=mdb_DIC_numeric>DIC_max;
+        index_DIC_exceed=np.where(states5)[0]
+        #Lower realistic limit <500 UMOL KG
+        states6=mdb_DIC_numeric<DIC_min;
+        index_DIC_below=np.where(states6)[0] 
+        
+        #pH
+        mdb_pH = matchupData["region_ph_mean"];
+        mdb_pH_numeric=mdb_pH.values;
+        #Upper realistic limit 8.5
+        states7=mdb_pH_numeric>pH_max;
+        index_pH_exceed=np.where(states7)[0]
+        #Lower realistic limit <7
+        states8=mdb_pH_numeric<pH_min;
+        index_pH_below=np.where(states8)[0]
+        
+        #pCO2
+        mdb_pco2 = matchupData["region_pco2w_mean"];
+        mdb_pco2_numeric=mdb_pco2.values;
+        #Upper realistic limit 700 ppm
+        states9=mdb_pco2_numeric>pCO2_max;
+        index_pco2_exceed=np.where(states9)[0]
+        #Lower realistic limit <200 ppm
+        states10=mdb_pco2_numeric<pCO2_min;
+        index_pco2_below=np.where(states10)[0]
+        
+        #TA
+        mdb_TA = matchupData["AT"];
+        mdb_TA_numeric=mdb_TA.values;
+        #Upper realistic limit 3000 umol kg
+        states11=mdb_TA_numeric>TA_max;
+        index_TA_exceed=np.where(states11)[0]
+        #Lower realistic limit <500 umol kg
+        states12=mdb_TA_numeric<TA_min;
+        index_TA_below=np.where(states12)[0]        
+        
+
+        #these variables could also have bounds placed on them but not applied 
+        #for this iteration
+        # lat long date OC chla DO NO3 PO4 SiO4
+        
+        # now produce a file with all of the out of bounds data points from the mdb
+        
+        mdb_flag_warnings_list=['SST greater than maximum value of', 'SST less than minimum value of', 'SSS greater than maximum value of', 'SST less than minimum value of'\
+                                , 'DIC greater than maximum value of', 'DIC less than minimum value of','pH greater than maximum value of','pH less than minimum value of'\
+                                ,'pCO2 greater than maximum value of','pCO2 less than minimum value of','TA greater than maximum value of','TA less than minimum value of']
+
+        mdb_flag_index_list=[index_temp_exceed, index_temp_below, index_sal_exceed, index_sal_below, index_DIC_exceed, index_DIC_below\
+                             ,index_pH_exceed,index_pH_below,index_pco2_exceed,index_pco2_below,index_TA_exceed,index_TA_below]
+        
+            
+        mdb_flag_limits_list=[SST_max,SST_min,SSS_max,SSS_min,DIC_max, DIC_min,  pH_max, pH_min,pCO2_max, pCO2_min, TA_max,TA_min]  
+        
+        for idx, g in enumerate(mdb_flag_index_list):
+            print(idx, g)
+            if len(g) == 0:
+                print("list is empty")
+            else:
+                #this prints a header for what the entries have been flagged for
+                with open('mdb_flag.csv','a') as result_file:
+                    wr = csv.writer(result_file, dialect='excel')
+                    wr.writerow([mdb_flag_warnings_list[idx]]+ [mdb_flag_limits_list[idx]])
+                #this prints the values that have been flagged to the csv    
+                print(matchupData.loc[g].to_csv("mdb_flag.csv",mode='a'));
+       
+        #now filter those mdb from the analysis
+        mdb_ind_rmv =np.concatenate(mdb_flag_index_list) #combine all the numpy arrays into a single array of 'bad data point indexes'
+        matchupData = matchupData.drop(matchupData.index[mdb_ind_rmv])
+
         ### Run each of the build in algorithms to compute model output, extract RMSD etc
         allAlgoOutputInfo = [];
         for ialgorithm, AlgorithmFunctor in enumerate(builtInAlgorithms):
